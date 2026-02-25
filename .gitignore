@@ -1,15 +1,75 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# =========================
+# Gradle
+# =========================
+.gradle/
+build/
+**/build/
+
+# Local configuration file (sdk path, etc)
 local.properties
+
+# Kotlin
+*.kotlin_module
+
+# =========================
+# Android Studio / IntelliJ
+# =========================
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Android Studio specific
+.idea/caches
+.idea/libraries
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Log files
+# =========================
+*.log
+
+# =========================
+# Generated files
+# =========================
+captures/
+.externalNativeBuild/
+.cxx/
+
+# =========================
+# APK / AAB
+# =========================
+*.apk
+*.aab
+
+# =========================
+# Keystore files
+# =========================
+*.jks
+*.keystore
+
+# =========================
+# Hilt / KSP / KAPT
+# =========================
+build/generated/
+build/intermediates/
+kapt/
+
+# =========================
+# Room database schema export (если не требуется в репо)
+# =========================
+schemas/
+
+# =========================
+# Misc
+# =========================
+*.orig

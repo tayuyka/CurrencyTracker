@@ -35,6 +35,7 @@ class CurrencyListFragment : Fragment() {
                         onEditCurrency = viewModel::onEditCurrencyClick,
                         onToggleFavorite = viewModel::toggleFavorite,
                         onRefreshRates = viewModel::refreshRates,
+                        onSnackbarShown = viewModel::onSnackbarShown,
                         onDismissDialog = viewModel::onDismissDialog,
                         onSaveCurrency = viewModel::saveCurrency,
                         onDeleteCurrency = viewModel::deleteCurrency,

@@ -1,25 +1,56 @@
 package com.yuya.currencytracker.presentation.viewmodel
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yuya.currencytracker.domain.model.Currency
 import com.yuya.currencytracker.domain.model.CurrencyHistoryEntry
 import com.yuya.currencytracker.domain.model.CurrencyIcon
 import com.yuya.currencytracker.domain.repository.CurrencyRepository
-import com.yuya.currencytracker.domain.usecase.*
+import com.yuya.currencytracker.domain.usecase.AddCurrencyUseCase
+import com.yuya.currencytracker.domain.usecase.DeleteCurrencyUseCase
+import com.yuya.currencytracker.domain.usecase.GetCurrenciesUseCase
+import com.yuya.currencytracker.domain.usecase.GetCurrencyHistoryUseCase
+import com.yuya.currencytracker.domain.usecase.RefreshRatesUseCase
+import com.yuya.currencytracker.domain.usecase.ToggleFavoriteUseCase
+import com.yuya.currencytracker.domain.usecase.UpdateCurrencyUseCase
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+enum class CurrencyFilter {
+    ALL,
+    FAVORITES,
+    STANDARD,
+    CUSTOM
+}
+
+enum class CurrencySort {
+    CODE,
+    RATE_ASC,
+    RATE_DESC
+}
+
+enum class HistorySort {
+    DATE_DESC,
+    DATE_ASC,
+    RATE_ASC,
+    RATE_DESC
+}
 
 data class CurrencyUiState(
     val currencies: List<Currency> = emptyList(),
+    val allCurrencies: List<Currency> = emptyList(),
     val showDialog: Boolean = false,
     val editingCurrency: Currency? = null,
     val selectedCurrencyId: String? = null,
     val selectedCurrency: Currency? = null,
     val history: List<CurrencyHistoryEntry> = emptyList(),
+    val currencyFilter: CurrencyFilter = CurrencyFilter.ALL,
+    val currencySort: CurrencySort = CurrencySort.CODE,
+    val historySort: HistorySort = HistorySort.DATE_DESC,
     val isRefreshing: Boolean = false,
     val snackbarMessage: String? = null
 )
@@ -35,106 +66,181 @@ class CurrencyViewModel(
     private val getCurrencyHistoryUseCase: GetCurrencyHistoryUseCase
 ) : ViewModel() {
 
-    var uiState by mutableStateOf(CurrencyUiState())
-        private set
+    private val _uiState = MutableStateFlow(CurrencyUiState())
+    val uiState: StateFlow<CurrencyUiState> = _uiState.asStateFlow()
 
     init {
-        loadCurrencies()
+        observeCurrencies()
         refreshRates()
         startAutoRefresh()
     }
 
     fun onAddCurrencyClick() {
-        uiState = uiState.copy(showDialog = true, editingCurrency = null)
+        _uiState.update { it.copy(showDialog = true, editingCurrency = null) }
     }
 
     fun onEditCurrencyClick(currency: Currency) {
-        uiState = uiState.copy(showDialog = true, editingCurrency = currency)
+        _uiState.update { it.copy(showDialog = true, editingCurrency = currency) }
     }
 
     fun onDismissDialog() {
-        uiState = uiState.copy(showDialog = false, editingCurrency = null)
+        _uiState.update { it.copy(showDialog = false, editingCurrency = null) }
     }
 
     fun saveCurrency(code: String, name: String, icon: CurrencyIcon, isFavorite: Boolean) {
-        val editingCurrency = uiState.editingCurrency
-        if (editingCurrency == null) {
-            addCurrencyUseCase(code, name, icon, isFavorite)
-        } else {
-            updateCurrencyUseCase(editingCurrency.id, code, name, icon, isFavorite)
-        }
+        viewModelScope.launch {
+            val editingCurrency = _uiState.value.editingCurrency
+            if (editingCurrency == null) {
+                addCurrencyUseCase(code, name, icon, isFavorite)
+            } else {
+                updateCurrencyUseCase(editingCurrency.id, code, name, icon, isFavorite)
+            }
 
-        uiState = uiState.copy(showDialog = false, editingCurrency = null)
-        loadCurrencies()
+            _uiState.update { it.copy(showDialog = false, editingCurrency = null) }
+        }
     }
 
     fun deleteCurrency(currencyId: String) {
-        deleteCurrencyUseCase(currencyId)
-
-        if (uiState.selectedCurrencyId == currencyId) {
-            uiState = uiState.copy(
-                selectedCurrencyId = null,
-                selectedCurrency = null,
-                history = emptyList()
-            )
+        viewModelScope.launch {
+            deleteCurrencyUseCase(currencyId)
+            if (_uiState.value.selectedCurrencyId == currencyId) {
+                _uiState.update {
+                    it.copy(
+                        selectedCurrencyId = null,
+                        selectedCurrency = null,
+                        history = emptyList()
+                    )
+                }
+            }
         }
-
-        loadCurrencies()
     }
 
     fun toggleFavorite(currencyId: String) {
-        toggleFavoriteUseCase(currencyId)
-        loadCurrencies()
+        viewModelScope.launch {
+            toggleFavoriteUseCase(currencyId)
+        }
     }
 
     fun refreshRates() {
-        if (uiState.isRefreshing) return
+        if (_uiState.value.isRefreshing) return
 
         viewModelScope.launch {
-            uiState = uiState.copy(isRefreshing = true)
+            _uiState.update { it.copy(isRefreshing = true) }
             val result = refreshRatesUseCase()
-            loadCurrencies()
-            uiState = uiState.copy(
-                isRefreshing = false,
-                snackbarMessage = result.exceptionOrNull()?.message
-                    ?.ifBlank { "Не удалось загрузить курсы" }
-            )
+            _uiState.update {
+                it.copy(
+                    isRefreshing = false,
+                    snackbarMessage = result.exceptionOrNull()?.message
+                        ?.ifBlank { "Не удалось загрузить курсы" }
+                )
+            }
         }
     }
 
     fun selectCurrency(currencyId: String) {
-        val selectedCurrency = repository.getCurrency(currencyId)
-        uiState = uiState.copy(
-            selectedCurrencyId = currencyId,
-            selectedCurrency = selectedCurrency,
-            history = selectedCurrency?.let {
-                getCurrencyHistoryUseCase(it)
-            } ?: emptyList()
-        )
+        viewModelScope.launch {
+            val selectedCurrency = repository.getCurrency(currencyId)
+            _uiState.update { state ->
+                state.copy(
+                    selectedCurrencyId = currencyId,
+                    selectedCurrency = selectedCurrency,
+                    history = selectedCurrency?.let {
+                        applyHistorySort(getCurrencyHistoryUseCase(it), state.historySort)
+                    } ?: emptyList()
+                )
+            }
+        }
     }
 
     fun refreshHistory() {
-        val selectedCurrencyId = uiState.selectedCurrencyId ?: return
         refreshRates()
-        selectCurrency(selectedCurrencyId)
+    }
+
+    fun setCurrencyFilter(filter: CurrencyFilter) {
+        _uiState.update { state ->
+            state.copy(
+                currencyFilter = filter,
+                currencies = applyCurrencyFilterAndSort(state.allCurrencies, filter, state.currencySort)
+            )
+        }
+    }
+
+    fun setCurrencySort(sort: CurrencySort) {
+        _uiState.update { state ->
+            state.copy(
+                currencySort = sort,
+                currencies = applyCurrencyFilterAndSort(state.allCurrencies, state.currencyFilter, sort)
+            )
+        }
+    }
+
+    fun setHistorySort(sort: HistorySort) {
+        _uiState.update { state ->
+            state.copy(
+                historySort = sort,
+                history = applyHistorySort(state.history, sort)
+            )
+        }
     }
 
     fun onSnackbarShown() {
-        uiState = uiState.copy(snackbarMessage = null)
+        _uiState.update { it.copy(snackbarMessage = null) }
     }
 
-    private fun loadCurrencies() {
-        val currencies = getCurrenciesUseCase()
-        val selectedCurrencyId = uiState.selectedCurrencyId
-        val selectedCurrency = selectedCurrencyId?.let(repository::getCurrency)
+    private fun observeCurrencies() {
+        viewModelScope.launch {
+            repository.initialize()
+            getCurrenciesUseCase().collect { currencies ->
+                _uiState.update { state ->
+                    val selectedCurrency = state.selectedCurrencyId?.let { selectedId ->
+                        currencies.firstOrNull { it.id == selectedId }
+                    }
+                    state.copy(
+                        allCurrencies = currencies,
+                        currencies = applyCurrencyFilterAndSort(
+                            currencies,
+                            state.currencyFilter,
+                            state.currencySort
+                        ),
+                        selectedCurrency = selectedCurrency,
+                        history = selectedCurrency?.let {
+                            applyHistorySort(getCurrencyHistoryUseCase(it), state.historySort)
+                        } ?: state.history
+                    )
+                }
+            }
+        }
+    }
 
-        uiState = uiState.copy(
-            currencies = currencies,
-            selectedCurrency = selectedCurrency,
-            history = selectedCurrency?.let {
-                getCurrencyHistoryUseCase(it)
-            } ?: emptyList()
-        )
+    private fun applyCurrencyFilterAndSort(
+        currencies: List<Currency>,
+        filter: CurrencyFilter,
+        sort: CurrencySort
+    ): List<Currency> {
+        val filtered = when (filter) {
+            CurrencyFilter.ALL -> currencies
+            CurrencyFilter.FAVORITES -> currencies.filter { it.isFavorite }
+            CurrencyFilter.STANDARD -> currencies.filter { it.isStandard }
+            CurrencyFilter.CUSTOM -> currencies.filterNot { it.isStandard }
+        }
+
+        return when (sort) {
+            CurrencySort.CODE -> filtered.sortedBy { it.code }
+            CurrencySort.RATE_ASC -> filtered.sortedBy { it.currentRate }
+            CurrencySort.RATE_DESC -> filtered.sortedByDescending { it.currentRate }
+        }
+    }
+
+    private fun applyHistorySort(
+        history: List<CurrencyHistoryEntry>,
+        sort: HistorySort
+    ): List<CurrencyHistoryEntry> {
+        return when (sort) {
+            HistorySort.DATE_DESC -> history.sortedByDescending { it.dayLabel }
+            HistorySort.DATE_ASC -> history.sortedBy { it.dayLabel }
+            HistorySort.RATE_ASC -> history.sortedBy { it.rate }
+            HistorySort.RATE_DESC -> history.sortedByDescending { it.rate }
+        }
     }
 
     private fun startAutoRefresh() {

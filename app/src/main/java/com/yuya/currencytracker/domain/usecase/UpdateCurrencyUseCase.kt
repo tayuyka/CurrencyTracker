@@ -4,7 +4,7 @@ import com.yuya.currencytracker.domain.model.CurrencyIcon
 import com.yuya.currencytracker.domain.repository.CurrencyRepository
 
 class UpdateCurrencyUseCase(private val repository: CurrencyRepository) {
-    operator fun invoke(currencyId: String, code: String, name: String, icon: CurrencyIcon, isFavorite: Boolean) {
+    suspend operator fun invoke(currencyId: String, code: String, name: String, icon: CurrencyIcon, isFavorite: Boolean) {
         val updatedList = repository.getCurrencies().map { currency ->
             if (currency.id == currencyId) {
                 currency.copy(

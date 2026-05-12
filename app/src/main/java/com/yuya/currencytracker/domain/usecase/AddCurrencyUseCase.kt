@@ -7,7 +7,7 @@ import java.util.UUID
 import kotlin.random.Random
 
 class AddCurrencyUseCase(private val repository: CurrencyRepository) {
-    operator fun invoke(code: String, name: String, icon: CurrencyIcon, isFavorite: Boolean) {
+    suspend operator fun invoke(code: String, name: String, icon: CurrencyIcon, isFavorite: Boolean) {
         val currencies = repository.getCurrencies()
         val newCurrency = Currency(
             id = UUID.randomUUID().toString(),

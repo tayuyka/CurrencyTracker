@@ -21,7 +21,7 @@ class CurrencyHistoryFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val currencyId = requireArguments().getInt(ARG_CURRENCY_ID)
+        val currencyId = requireArguments().getString(ARG_CURRENCY_ID).orEmpty()
         if (viewModel.uiState.selectedCurrencyId != currencyId) {
             viewModel.selectCurrency(currencyId)
         }
@@ -50,10 +50,10 @@ class CurrencyHistoryFragment : Fragment() {
         const val TAG = "CurrencyHistoryFragment"
         private const val ARG_CURRENCY_ID = "arg_currency_id"
 
-        fun newInstance(currencyId: Int): CurrencyHistoryFragment {
+        fun newInstance(currencyId: String): CurrencyHistoryFragment {
             return CurrencyHistoryFragment().apply {
                 arguments = Bundle().apply {
-                    putInt(ARG_CURRENCY_ID, currencyId)
+                    putString(ARG_CURRENCY_ID, currencyId)
                 }
             }
         }

@@ -18,7 +18,7 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    fun openCurrencyHistory(currencyId: Int) {
+    fun openCurrencyHistory(currencyId: String) {
         supportFragmentManager.commit {
             replace(
                 R.id.fragment_container,

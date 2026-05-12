@@ -3,6 +3,7 @@ package com.yuya.currencytracker.data.local
 import android.content.Context
 import android.content.SharedPreferences
 import com.yuya.currencytracker.domain.model.Currency
+import com.yuya.currencytracker.domain.model.CurrencyHistoryEntry
 import com.yuya.currencytracker.domain.model.CurrencyIcon
 import org.json.JSONArray
 import org.json.JSONObject
@@ -21,13 +22,14 @@ class CurrencyPreferencesDataSource(context: Context) {
                 val item = array.getJSONObject(index)
                 add(
                     Currency(
-                        id = item.getInt(KEY_ID),
+                        id = item.optString(KEY_ID).ifBlank { item.optInt(KEY_ID).toString() },
                         code = item.getString(KEY_CODE),
                         name = item.getString(KEY_NAME),
                         currentRate = item.getDouble(KEY_RATE),
                         icon = CurrencyIcon.valueOf(item.getString(KEY_ICON)),
                         isFavorite = item.optBoolean(KEY_FAVORITE, false),
-                        isStandard = item.optBoolean(KEY_STANDARD, false)
+                        isStandard = item.optBoolean(KEY_STANDARD, false),
+                        history = item.optJSONArray(KEY_HISTORY)?.toHistoryEntries().orEmpty()
                     )
                 )
             }
@@ -46,10 +48,37 @@ class CurrencyPreferencesDataSource(context: Context) {
                     .put(KEY_ICON, currency.icon.name)
                     .put(KEY_FAVORITE, currency.isFavorite)
                     .put(KEY_STANDARD, currency.isStandard)
+                    .put(KEY_HISTORY, currency.history.toJsonArray())
             )
         }
 
         preferences.edit().putString(KEY_CURRENCIES, array.toString()).apply()
+    }
+
+    private fun JSONArray.toHistoryEntries(): List<CurrencyHistoryEntry> {
+        return buildList {
+            for (index in 0 until length()) {
+                val item = getJSONObject(index)
+                add(
+                    CurrencyHistoryEntry(
+                        dayLabel = item.getString(KEY_HISTORY_LABEL),
+                        rate = item.getDouble(KEY_HISTORY_RATE)
+                    )
+                )
+            }
+        }
+    }
+
+    private fun List<CurrencyHistoryEntry>.toJsonArray(): JSONArray {
+        val array = JSONArray()
+        forEach { entry ->
+            array.put(
+                JSONObject()
+                    .put(KEY_HISTORY_LABEL, entry.dayLabel)
+                    .put(KEY_HISTORY_RATE, entry.rate)
+            )
+        }
+        return array
     }
 
     private companion object {
@@ -62,5 +91,8 @@ class CurrencyPreferencesDataSource(context: Context) {
         const val KEY_ICON = "icon"
         const val KEY_FAVORITE = "is_favorite"
         const val KEY_STANDARD = "is_standard"
+        const val KEY_HISTORY = "history"
+        const val KEY_HISTORY_LABEL = "day_label"
+        const val KEY_HISTORY_RATE = "rate"
     }
 }

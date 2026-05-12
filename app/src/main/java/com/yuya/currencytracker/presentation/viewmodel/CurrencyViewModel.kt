@@ -1,23 +1,27 @@
 package com.yuya.currencytracker.presentation.viewmodel
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.yuya.currencytracker.domain.model.Currency
 import com.yuya.currencytracker.domain.model.CurrencyHistoryEntry
 import com.yuya.currencytracker.domain.model.CurrencyIcon
 import com.yuya.currencytracker.domain.repository.CurrencyRepository
 import com.yuya.currencytracker.domain.usecase.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 data class CurrencyUiState(
     val currencies: List<Currency> = emptyList(),
     val showDialog: Boolean = false,
     val editingCurrency: Currency? = null,
-    val selectedCurrencyId: Int? = null,
+    val selectedCurrencyId: String? = null,
     val selectedCurrency: Currency? = null,
-    val history: List<CurrencyHistoryEntry> = emptyList()
+    val history: List<CurrencyHistoryEntry> = emptyList(),
+    val isRefreshing: Boolean = false,
+    val snackbarMessage: String? = null
 )
 
 class CurrencyViewModel(
@@ -34,10 +38,10 @@ class CurrencyViewModel(
     var uiState by mutableStateOf(CurrencyUiState())
         private set
 
-    private var historyRefreshVersion by mutableIntStateOf(0)
-
     init {
         loadCurrencies()
+        refreshRates()
+        startAutoRefresh()
     }
 
     fun onAddCurrencyClick() {
@@ -64,11 +68,10 @@ class CurrencyViewModel(
         loadCurrencies()
     }
 
-    fun deleteCurrency(currencyId: Int) {
+    fun deleteCurrency(currencyId: String) {
         deleteCurrencyUseCase(currencyId)
 
         if (uiState.selectedCurrencyId == currencyId) {
-            historyRefreshVersion = 0
             uiState = uiState.copy(
                 selectedCurrencyId = null,
                 selectedCurrency = null,
@@ -79,37 +82,45 @@ class CurrencyViewModel(
         loadCurrencies()
     }
 
-    fun toggleFavorite(currencyId: Int) {
+    fun toggleFavorite(currencyId: String) {
         toggleFavoriteUseCase(currencyId)
         loadCurrencies()
     }
 
     fun refreshRates() {
-        refreshRatesUseCase()
-        loadCurrencies()
+        if (uiState.isRefreshing) return
+
+        viewModelScope.launch {
+            uiState = uiState.copy(isRefreshing = true)
+            val result = refreshRatesUseCase()
+            loadCurrencies()
+            uiState = uiState.copy(
+                isRefreshing = false,
+                snackbarMessage = result.exceptionOrNull()?.message
+                    ?.ifBlank { "Не удалось загрузить курсы" }
+            )
+        }
     }
 
-    fun selectCurrency(currencyId: Int) {
-        historyRefreshVersion = 0
+    fun selectCurrency(currencyId: String) {
         val selectedCurrency = repository.getCurrency(currencyId)
         uiState = uiState.copy(
             selectedCurrencyId = currencyId,
             selectedCurrency = selectedCurrency,
             history = selectedCurrency?.let {
-                getCurrencyHistoryUseCase(it, historyRefreshVersion)
+                getCurrencyHistoryUseCase(it)
             } ?: emptyList()
         )
     }
 
     fun refreshHistory() {
         val selectedCurrencyId = uiState.selectedCurrencyId ?: return
-        val selectedCurrency = repository.getCurrency(selectedCurrencyId) ?: return
+        refreshRates()
+        selectCurrency(selectedCurrencyId)
+    }
 
-        historyRefreshVersion += 1
-        uiState = uiState.copy(
-            selectedCurrency = selectedCurrency,
-            history = getCurrencyHistoryUseCase(selectedCurrency, historyRefreshVersion)
-        )
+    fun onSnackbarShown() {
+        uiState = uiState.copy(snackbarMessage = null)
     }
 
     private fun loadCurrencies() {
@@ -121,8 +132,21 @@ class CurrencyViewModel(
             currencies = currencies,
             selectedCurrency = selectedCurrency,
             history = selectedCurrency?.let {
-                getCurrencyHistoryUseCase(it, historyRefreshVersion)
+                getCurrencyHistoryUseCase(it)
             } ?: emptyList()
         )
+    }
+
+    private fun startAutoRefresh() {
+        viewModelScope.launch {
+            while (true) {
+                delay(AUTO_REFRESH_DELAY_MS)
+                refreshRates()
+            }
+        }
+    }
+
+    private companion object {
+        const val AUTO_REFRESH_DELAY_MS = 60_000L
     }
 }

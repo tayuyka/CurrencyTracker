@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.yuya.currencytracker.data.local.CurrencyPreferencesDataSource
+import com.yuya.currencytracker.data.remote.ExchangeRatesNetwork
 import com.yuya.currencytracker.data.repository.SharedPreferencesCurrencyRepository
 import com.yuya.currencytracker.domain.usecase.*
 
@@ -14,7 +15,8 @@ class CurrencyViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(CurrencyViewModel::class.java)) {
             val repository = SharedPreferencesCurrencyRepository(
-                CurrencyPreferencesDataSource(context.applicationContext)
+                CurrencyPreferencesDataSource(context.applicationContext),
+                ExchangeRatesNetwork.createApi()
             )
             
             val getCurrenciesUseCase = GetCurrenciesUseCase(repository)

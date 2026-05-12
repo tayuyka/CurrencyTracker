@@ -4,25 +4,24 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.activityViewModels
 import com.yuya.currencytracker.presentation.ui.screens.CurrencyHistoryScreen
 import com.yuya.currencytracker.presentation.ui.theme.CurrencyTrackerTheme
 import com.yuya.currencytracker.presentation.viewmodel.CurrencyViewModel
-import com.yuya.currencytracker.presentation.viewmodel.CurrencyViewModelFactory
+import org.koin.androidx.viewmodel.ext.android.activityViewModel
 
 class CurrencyHistoryFragment : Fragment() {
 
-    private val viewModel: CurrencyViewModel by activityViewModels {
-        CurrencyViewModelFactory(requireContext().applicationContext)
-    }
+    private val viewModel: CurrencyViewModel by activityViewModel()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val currencyId = requireArguments().getString(ARG_CURRENCY_ID).orEmpty()
-        if (viewModel.uiState.selectedCurrencyId != currencyId) {
+        if (viewModel.uiState.value.selectedCurrencyId != currencyId) {
             viewModel.selectCurrency(currencyId)
         }
     }
@@ -35,11 +34,14 @@ class CurrencyHistoryFragment : Fragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                val uiState by viewModel.uiState.collectAsState()
                 CurrencyTrackerTheme {
                     CurrencyHistoryScreen(
-                        uiState = viewModel.uiState,
+                        uiState = uiState,
                         onBack = { parentFragmentManager.popBackStack() },
-                        onRefresh = viewModel::refreshHistory
+                        onRefresh = viewModel::refreshHistory,
+                        onCurrencySelected = viewModel::selectCurrency,
+                        onHistorySortChange = viewModel::setHistorySort
                     )
                 }
             }
